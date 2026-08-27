@@ -366,7 +366,8 @@ async def get_job_matches_geojson(job_id: str):
         
     from fastapi.responses import JSONResponse
     
-    if not result or not result["match_points"]:
+    result = job_data.get("result")
+    if not result or not result.get("match_points"):
         return JSONResponse(
             content={"type": "FeatureCollection", "features": []},
             headers={"Content-Disposition": f"attachment; filename=job_{job_id}_matches.geojson"}
