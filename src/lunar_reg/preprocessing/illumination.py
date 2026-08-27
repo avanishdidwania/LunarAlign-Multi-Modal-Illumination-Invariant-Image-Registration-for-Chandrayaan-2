@@ -97,6 +97,52 @@ class IlluminationNormalizer:
         pc = total_energy / (total_amplitude + epsilon)
         return np.clip(pc, 0.0, 1.0)
 
+    def phase_congruency_tiled(self, image: np.ndarray, n_scales: int = 4,
+                               n_orientations: int = 6, tile_size: int = 2048,
+                               overlap: int = 128) -> np.ndarray:
+        """
+        Compute phase congruency in tiles to prevent Out-Of-Memory (OOM) errors
+        on extremely large satellite tracks (e.g. 4000 x 200,000).
+        """
+        rows, cols = image.shape
+        result = np.zeros_like(image, dtype=np.float32)
+        
+        # Calculate step sizes
+        y_step = tile_size - 2 * overlap
+        x_step = tile_size - 2 * overlap
+        
+        for y in range(0, rows, y_step):
+            y_start = max(0, y - overlap)
+            y_end = min(rows, y + tile_size - overlap)
+            
+            for x in range(0, cols, x_step):
+                x_start = max(0, x - overlap)
+                x_end = min(cols, x + tile_size - overlap)
+                
+                # Extract tile
+                tile = image[y_start:y_end, x_start:x_end]
+                if tile.size == 0:
+                    continue
+                    
+                # Compute PC for this tile
+                tile_pc = self.phase_congruency(tile, n_scales=n_scales, n_orientations=n_orientations)
+                
+                # Determine output target region (non-overlapping region)
+                out_y_start = y
+                out_y_end = min(rows, y + y_step)
+                out_x_start = x
+                out_x_end = min(cols, x + x_step)
+                
+                # Crop corresponding region from tile_pc
+                tile_y_start = out_y_start - y_start
+                tile_y_end = out_y_end - y_start
+                tile_x_start = out_x_start - x_start
+                tile_x_end = out_x_end - x_start
+                
+                result[out_y_start:out_y_end, out_x_start:out_x_end] = tile_pc[tile_y_start:tile_y_end, tile_x_start:tile_x_end]
+                
+        return result
+
     def local_normalized_mean_subtraction(self, image: np.ndarray,
                                           kernel_size: int = 31) -> np.ndarray:
         """
@@ -150,6 +196,8 @@ class IlluminationNormalizer:
     def normalize(self, image: np.ndarray, method: str = "phase_congruency") -> np.ndarray:
         """Apply selected illumination normalization method."""
         if method == "phase_congruency":
+            if image.shape[0] > 2048 or image.shape[1] > 2048:
+                return self.phase_congruency_tiled(image)
             return self.phase_congruency(image)
         elif method == "clahe":
             return self.clahe(image)

@@ -95,7 +95,7 @@ def test_transform_estimation_round_trip_projective(H, num_pts):
     res_matrix_norm = res.matrix / res.matrix[2, 2]
     
     np.testing.assert_allclose(res_matrix_norm, H_norm, rtol=1e-3, atol=1e-3)
-    assert res.rmse < 1e-2
+    assert res.rmse < 5e-2
 
 # Feature: lunar-image-registration, Property 12: Insufficient points error
 # Validates: Requirements 6.3

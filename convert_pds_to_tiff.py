@@ -6,7 +6,7 @@ Usage:
   python convert_pds_to_tiff.py <path_to_extracted_bundle_folder> [output.tif]
   
 Example:
-  python convert_pds_to_tiff.py "C:\Users\arunk\Downloads\ch1_tmc_ncn_20090529T..._Bundle\data" source.tif
+  python convert_pds_to_tiff.py "C:\\Users\\arunk\\Downloads\\ch1_tmc_ncn_20090529T..._Bundle\\data" source.tif
 """
 import sys
 import glob
