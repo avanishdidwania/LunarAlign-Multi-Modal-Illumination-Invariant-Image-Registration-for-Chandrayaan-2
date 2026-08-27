@@ -52,7 +52,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onRun, isLoading }
           <input
             type="file"
             id="source-upload"
-            accept=".tif,.tiff,.img,.pds,.jp2,.png"
+            accept=".tif,.tiff,.img,.pds,.jp2,.png,.zip"
             onChange={handleSourceChange}
             style={{ display: 'none' }}
           />
@@ -76,7 +76,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onRun, isLoading }
           <input
             type="file"
             id="reference-upload"
-            accept=".tif,.tiff,.img,.pds,.jp2,.png"
+            accept=".tif,.tiff,.img,.pds,.jp2,.png,.zip"
             onChange={handleReferenceChange}
             style={{ display: 'none' }}
           />

@@ -1,0 +1,47 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies for rasterio/GDAL and OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgdal-dev \
+    gdal-bin \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CPU-only PyTorch first (much smaller than CUDA build)
+RUN pip install --no-cache-dir \
+    torch==2.1.2+cpu \
+    torchvision==0.16.2+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Copy packaging config and source
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
+# Install the lunar-reg package (without re-installing torch)
+RUN pip install --no-cache-dir --no-deps . && \
+    pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    python-multipart \
+    rasterio \
+    numpy \
+    opencv-python-headless \
+    scikit-image \
+    scipy \
+    kornia \
+    lightglue \
+    pydantic
+
+# Create upload and results directories
+RUN mkdir -p /app/uploads /app/results/jobs
+
+# HuggingFace Spaces requires port 7860
+EXPOSE 7860
+
+# Start uvicorn on port 7860
+CMD ["uvicorn", "lunar_reg.web.app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

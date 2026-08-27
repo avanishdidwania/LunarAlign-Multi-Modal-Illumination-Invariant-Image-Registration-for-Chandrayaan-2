@@ -75,8 +75,16 @@ export const apiClient = {
       body: formData,
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: "Failed to submit job" }));
-      throw new Error(err.detail || "Failed to submit job");
+      const errText = await res.text().catch(() => "Unknown error");
+      console.error(`Registration failed: HTTP ${res.status}`, errText);
+      let detail = "Failed to submit job";
+      try {
+        const errJson = JSON.parse(errText);
+        detail = errJson.detail || detail;
+      } catch { /* not JSON */ 
+        detail = errText || detail;
+      }
+      throw new Error(detail);
     }
     return res.json();
   },

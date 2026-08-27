@@ -11,6 +11,6 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-    allowedHosts: 'all',   // allow cloudflare tunnel hostnames
+    allowedHosts: true,   // allow cloudflare tunnel and Vercel preview hostnames
   },
 })

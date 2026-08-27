@@ -184,6 +184,99 @@ async def register(
     with open(ref_path, "wb") as f:
         while chunk := await reference_image.read(CHUNK):
             f.write(chunk)
+            
+    # Automatically extract if uploaded file is a ZIP bundle (e.g. from ISRO PRADAN)
+    import zipfile
+    
+    if src_ext.lower() == ".zip":
+        extract_dir = UPLOADS_DIR / f"{job_id}_source_extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(src_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            
+            # Find the PDS4 .xml label first
+            xmls = list(extract_dir.glob("**/*.xml"))
+            found = False
+            for xml in xmls:
+                try:
+                    with open(xml, 'r', errors='ignore') as f:
+                        content = f.read(2000)
+                        if 'Array_2D' in content or 'Array_3D' in content or '.img' in content:
+                            src_path = xml
+                            found = True
+                            break
+                except Exception:
+                    pass
+            
+            if not found:
+                # Try PDS3 .lbl
+                lbls = list(extract_dir.glob("**/*.lbl"))
+                if lbls:
+                    src_path = lbls[0]
+                    found = True
+            
+            if not found:
+                # Try .xml fallback
+                if xmls:
+                    src_path = xmls[0]
+                    found = True
+                    
+            if not found:
+                # Try raster fallback
+                for ext in [".tif", ".tiff", ".img"]:
+                    imgs = list(extract_dir.glob(f"**/*{ext}"))
+                    if imgs:
+                        src_path = imgs[0]
+                        found = True
+                        break
+            logger.info(f"Automatically extracted source ZIP: resolved path to {src_path}")
+        except Exception as e:
+            logger.error(f"Failed to extract uploaded source ZIP: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to extract uploaded source ZIP: {e}")
+
+    if ref_ext.lower() == ".zip":
+        extract_dir = UPLOADS_DIR / f"{job_id}_reference_extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(ref_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+                
+            xmls = list(extract_dir.glob("**/*.xml"))
+            found = False
+            for xml in xmls:
+                try:
+                    with open(xml, 'r', errors='ignore') as f:
+                        content = f.read(2000)
+                        if 'Array_2D' in content or 'Array_3D' in content or '.img' in content:
+                            ref_path = xml
+                            found = True
+                            break
+                except Exception:
+                    pass
+                    
+            if not found:
+                lbls = list(extract_dir.glob("**/*.lbl"))
+                if lbls:
+                    ref_path = lbls[0]
+                    found = True
+                    
+            if not found:
+                if xmls:
+                    ref_path = xmls[0]
+                    found = True
+                    
+            if not found:
+                for ext in [".tif", ".tiff", ".img"]:
+                    imgs = list(extract_dir.glob(f"**/*{ext}"))
+                    if imgs:
+                        ref_path = imgs[0]
+                        found = True
+                        break
+            logger.info(f"Automatically extracted reference ZIP: resolved path to {ref_path}")
+        except Exception as e:
+            logger.error(f"Failed to extract uploaded reference ZIP: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to extract uploaded reference ZIP: {e}")
         
     # Initialize job data to pending
     job_data = {
