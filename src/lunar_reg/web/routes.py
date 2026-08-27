@@ -364,9 +364,13 @@ async def get_job_matches_geojson(job_id: str):
     if job_data["status"] != "completed":
         raise HTTPException(status_code=400, detail="Job is not completed yet")
         
-    result = job_data["result"]
+    from fastapi.responses import JSONResponse
+    
     if not result or not result["match_points"]:
-        return {"type": "FeatureCollection", "features": []}
+        return JSONResponse(
+            content={"type": "FeatureCollection", "features": []},
+            headers={"Content-Disposition": f"attachment; filename=job_{job_id}_matches.geojson"}
+        )
         
     ref_path = job_data["reference_path"]
     
@@ -392,10 +396,13 @@ async def get_job_matches_geojson(job_id: str):
                     }
                 })
                 
-            return {
-                "type": "FeatureCollection",
-                "features": features
-            }
+            return JSONResponse(
+                content={
+                    "type": "FeatureCollection",
+                    "features": features
+                },
+                headers={"Content-Disposition": f"attachment; filename=job_{job_id}_matches.geojson"}
+            )
     except Exception as e:
         logger.warning(f"Failed to georeference matches for job {job_id}: {e}")
         # Return fallback pixel-based GeoJSON (assuming coordinates represent pixels)
@@ -413,10 +420,13 @@ async def get_job_matches_geojson(job_id: str):
                     "confidence": float(m["confidence"])
                 }
             })
-        return {
-            "type": "FeatureCollection",
-            "features": features
-        }
+        return JSONResponse(
+            content={
+                "type": "FeatureCollection",
+                "features": features
+            },
+            headers={"Content-Disposition": f"attachment; filename=job_{job_id}_matches.geojson"}
+        )
 
 
 @router.get("/jobs/{job_id}/matches/csv")
