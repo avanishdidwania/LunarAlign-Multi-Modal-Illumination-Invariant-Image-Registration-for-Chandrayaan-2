@@ -2,12 +2,14 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { MatchPoint } from '../api/client';
 
 interface MatchPointOverlayProps {
+  jobId?: string;
   sourceFile: File;
   referenceFile: File;
   matches: MatchPoint[];
 }
 
 export const MatchPointOverlay: React.FC<MatchPointOverlayProps> = ({
+  jobId,
   sourceFile,
   referenceFile,
   matches
@@ -19,24 +21,43 @@ export const MatchPointOverlay: React.FC<MatchPointOverlayProps> = ({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
-  // Revoke old object URLs on change
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+
+  // Load preview images (use backend PNG previews for TIFFs/IMGs to bypass browser native limitations)
   useEffect(() => {
-    const srcUrl = URL.createObjectURL(sourceFile);
-    const refUrl = URL.createObjectURL(referenceFile);
+    const isTiff = (f: File) => {
+      const ext = f.name.split('.').pop()?.toLowerCase();
+      return ['tif', 'tiff', 'img', 'pds'].includes(ext || '');
+    };
+
+    let srcUrl = "";
+    let refUrl = "";
+
+    if (jobId && (isTiff(sourceFile) || isTiff(referenceFile))) {
+      srcUrl = `${API_BASE}/jobs/${jobId}/preview/source`;
+      refUrl = `${API_BASE}/jobs/${jobId}/preview/reference`;
+    } else {
+      srcUrl = URL.createObjectURL(sourceFile);
+      refUrl = URL.createObjectURL(referenceFile);
+    }
 
     const sImg = new Image();
+    sImg.crossOrigin = "anonymous";
     sImg.src = srcUrl;
     sImg.onload = () => setSourceImg(sImg);
 
     const rImg = new Image();
+    rImg.crossOrigin = "anonymous";
     rImg.src = refUrl;
     rImg.onload = () => setReferenceImg(rImg);
 
     return () => {
-      URL.revokeObjectURL(srcUrl);
-      URL.revokeObjectURL(refUrl);
+      if (!jobId || (!isTiff(sourceFile) && !isTiff(referenceFile))) {
+        URL.revokeObjectURL(srcUrl);
+        URL.revokeObjectURL(refUrl);
+      }
     };
-  }, [sourceFile, referenceFile]);
+  }, [jobId, sourceFile, referenceFile]);
 
   // Redraw canvas loop
   useEffect(() => {

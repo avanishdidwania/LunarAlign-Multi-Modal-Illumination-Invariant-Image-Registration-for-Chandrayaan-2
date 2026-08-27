@@ -203,6 +203,7 @@ export default function App() {
                   <ResultViewer jobId={jobResult.job_id} />
                 ) : (
                   <MatchPointOverlay 
+                    jobId={jobResult.job_id}
                     sourceFile={sourceFile} 
                     referenceFile={referenceFile} 
                     matches={jobResult.result.match_points} 
