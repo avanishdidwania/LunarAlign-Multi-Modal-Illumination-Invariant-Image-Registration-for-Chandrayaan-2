@@ -70,7 +70,9 @@ def run_pipeline_job(
                     "psnr": float(qm.psnr),
                     "mutual_information": float(qm.mutual_information),
                     "inlier_ratio": float(qm.inlier_ratio),
-                    "q_score": float(qm.q_score)
+                    "q_score": float(qm.q_score),
+                    "rmse": float(qm.rmse),
+                    "spatial_distribution_score": float(qm.spatial_distribution_score)
                 }
                 
             rmse = None
@@ -308,6 +310,42 @@ async def get_job_matches_geojson(job_id: str):
             "type": "FeatureCollection",
             "features": features
         }
+
+
+@router.get("/jobs/{job_id}/matches/csv")
+async def download_matches_csv(job_id: str):
+    """Generates downloadable CSV containing all inlier match coordinates and confidence."""
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    job_file = JOBS_DIR / f"{job_id}.json"
+    if not job_file.exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    with open(job_file, "r") as f:
+        job_data = json.load(f)
+        
+    if job_data["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Job is not completed yet")
+        
+    result = job_data["result"]
+    if not result or not result["match_points"]:
+        raise HTTPException(status_code=400, detail="No matches found for this job")
+        
+    csv_io = io.StringIO()
+    csv_io.write("match_id,source_x,source_y,reference_x,reference_y,confidence\n")
+    for idx, m in enumerate(result["match_points"]):
+        sx, sy = m["source_pt"]
+        rx, ry = m["reference_pt"]
+        conf = m["confidence"]
+        csv_io.write(f"{idx},{sx:.3f},{sy:.3f},{rx:.3f},{ry:.3f},{conf:.4f}\n")
+        
+    csv_io.seek(0)
+    return StreamingResponse(
+        io.BytesIO(csv_io.getvalue().encode('utf-8')),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=job_{job_id}_matches.csv"}
+    )
 
 
 @router.get("/jobs/{job_id}/preview/{image_type}")

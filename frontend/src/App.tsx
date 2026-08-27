@@ -8,6 +8,8 @@ import { apiClient } from './api/client';
 import type { JobResponse, RegistrationConfig } from './api/client';
 import './App.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+
 export default function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -169,13 +171,32 @@ export default function App() {
                     </button>
                   </div>
 
-                  <a 
-                    href={apiClient.getRegisteredImageUrl(jobResult.job_id)}
-                    className="download-link"
-                    download
-                  >
-                    <Download size={14} /> Download GeoTIFF
-                  </a>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <a 
+                      href={`${API_BASE}/jobs/${jobResult.job_id}/matches`}
+                      className="download-link"
+                      download={`job_${jobResult.job_id}_matches.geojson`}
+                      title="Export tie-points as GeoJSON features"
+                    >
+                      <Download size={14} /> GeoJSON
+                    </a>
+                    <a 
+                      href={`${API_BASE}/jobs/${jobResult.job_id}/matches/csv`}
+                      className="download-link"
+                      download={`job_${jobResult.job_id}_matches.csv`}
+                      title="Export tie-points as CSV spreadsheet"
+                    >
+                      <Download size={14} /> CSV
+                    </a>
+                    <a 
+                      href={apiClient.getRegisteredImageUrl(jobResult.job_id)}
+                      className="download-link"
+                      download
+                      title="Download warped and co-registered GeoTIFF"
+                    >
+                      <Download size={14} /> GeoTIFF
+                    </a>
+                  </div>
                 </div>
 
                 {visTab === 'visualizer' ? (
