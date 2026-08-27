@@ -102,7 +102,19 @@ class ImageLoader:
 
         try:
             with rasterio.open(file_path) as src:
-                data = src.read()
+                # If image is extremely large (e.g. orbit tracks), use windowed reading
+                # to only load a central 4096x4096 patch. This avoids OOMs and takes < 1 second.
+                MAX_DIM = 4096
+                if src.height > MAX_DIM or src.width > MAX_DIM:
+                    new_h = min(src.height, MAX_DIM)
+                    new_w = min(src.width, MAX_DIM)
+                    dy = (src.height - new_h) // 2
+                    dx = (src.width - new_w) // 2
+                    from rasterio.windows import Window
+                    win = Window(dx, dy, new_w, new_h)
+                    data = src.read(window=win)
+                else:
+                    data = src.read()
                 
                 # Check for empty or invalid data
                 if data.size == 0:
