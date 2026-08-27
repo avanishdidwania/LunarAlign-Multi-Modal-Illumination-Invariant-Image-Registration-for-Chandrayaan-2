@@ -1,0 +1,17 @@
+.git
+.gitignore
+.hypothesis
+.pytest_cache
+.venv
+node_modules
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+uploads/
+results/
+models/
+output_dummy/
+frontend/dist/
+frontend/node_modules/

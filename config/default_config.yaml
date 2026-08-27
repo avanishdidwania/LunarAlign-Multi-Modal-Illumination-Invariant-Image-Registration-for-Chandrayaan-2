@@ -1,0 +1,28 @@
+pipeline:
+  illumination_method: "phase_congruency"  # phase_congruency | clahe | gradient | lnms
+  pyramid_levels: null                     # null = auto from resolution ratio
+  pyramid_scale_factor: 0.5
+  detection_method: "superpoint"           # sift | superpoint
+  max_keypoints: 8192
+  matching_method: "lightglue"             # bf | lightglue | loftr
+  match_threshold: 0.2
+  outlier_method: "magsac++"               # ransac | magsac++ | lmeds
+  ransac_confidence: 0.999
+  ransac_max_iters: 10000
+  transform_type: null                     # null | affine | projective
+  refine_subpixel: true
+  refinement_patch_size: 21
+  interpolation: "bicubic"                 # bilinear | bicubic | lanczos
+  device: "auto"                           # auto | cuda | cpu
+
+web:
+  host: "0.0.0.0"
+  port: 8000
+  upload_max_size_mb: 500
+  results_dir: "./results"
+  cors_origins: ["*"]
+
+storage:
+  upload_dir: "./uploads"
+  results_dir: "./results"
+  export_dir: "./exports"
