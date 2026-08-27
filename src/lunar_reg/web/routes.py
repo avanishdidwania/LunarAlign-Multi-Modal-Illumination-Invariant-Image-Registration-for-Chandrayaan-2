@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List
 import numpy as np
 import rasterio
 
-from fastapi import APIRouter, File, UploadFile, BackgroundTasks, HTTPException, Form
+from fastapi import APIRouter, File, UploadFile, BackgroundTasks, HTTPException, Form, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from lunar_reg.config import RegistrationConfig
@@ -131,17 +131,28 @@ def run_pipeline_job(
 
 @router.post("/register", response_model=JobResponse)
 async def register(
+    request: Request,
     background_tasks: BackgroundTasks,
-    source_image: UploadFile = File(...),
-    reference_image: UploadFile = File(...),
-    illumination_method: str = Form("phase_congruency"),
-    detection_method: str = Form("superpoint"),
-    matching_method: str = Form("lightglue"),
-    outlier_method: str = Form("magsac++"),
-    transform_type: Optional[str] = Form(None),
-    refine_subpixel: bool = Form(True),
-    device: str = Form("auto")
 ):
+    # Parse multipart form with a 4 GB per-part size limit to handle large .img files
+    try:
+        form = await request.form(max_files=10, max_fields=20, max_part_size=4 * 1024 * 1024 * 1024)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Form parse error: {e}")
+
+    source_image: UploadFile = form.get("source_image")
+    reference_image: UploadFile = form.get("reference_image")
+    if source_image is None or reference_image is None:
+        raise HTTPException(status_code=422, detail="source_image and reference_image are required")
+
+    illumination_method: str = form.get("illumination_method", "phase_congruency")
+    detection_method: str    = form.get("detection_method",    "superpoint")
+    matching_method: str     = form.get("matching_method",     "lightglue")
+    outlier_method: str      = form.get("outlier_method",      "magsac++")
+    transform_type: Optional[str] = form.get("transform_type", None) or None
+    refine_subpixel: bool    = str(form.get("refine_subpixel", "true")).lower() == "true"
+    device: str              = form.get("device",              "auto")
+
     # Validate configuration parameters
     try:
         config = RegistrationConfig(
@@ -165,11 +176,14 @@ async def register(
     src_path = UPLOADS_DIR / f"{job_id}_source{src_ext}"
     ref_path = UPLOADS_DIR / f"{job_id}_reference{ref_ext}"
     
-    # Save uploaded files
+    # Save uploaded files using chunked streaming (handles large .img files gracefully)
+    CHUNK = 8 * 1024 * 1024  # 8 MB chunks
     with open(src_path, "wb") as f:
-        f.write(await source_image.read())
+        while chunk := await source_image.read(CHUNK):
+            f.write(chunk)
     with open(ref_path, "wb") as f:
-        f.write(await reference_image.read())
+        while chunk := await reference_image.read(CHUNK):
+            f.write(chunk)
         
     # Initialize job data to pending
     job_data = {
