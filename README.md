@@ -358,5 +358,5 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ---
 
 <p align="center">
-  Built with ❤️ for ISRO and the Smart India Hackathon 2024
+  Built with ❤️ for ISRO and the Smart India Hackathon 2026
 </p>
