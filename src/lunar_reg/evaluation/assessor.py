@@ -11,6 +11,8 @@ class QualityMetrics:
     mutual_information: float  # Normalized mutual information (NMI) in [0, 1]
     inlier_ratio: float
     q_score: float
+    rmse: float
+    spatial_distribution_score: float
 
 class QualityAssessor:
     """Evaluates the registration quality of warped images against reference images."""
@@ -23,7 +25,8 @@ class QualityAssessor:
     def assess(self, warped_source: np.ndarray,
                reference_image: np.ndarray,
                inlier_matches: List[MatchPair],
-               total_initial_matches: int) -> QualityMetrics:
+               total_initial_matches: int,
+               rmse: float = 0.0) -> QualityMetrics:
         """
         Assess registration quality over overlapping region.
         """
@@ -42,7 +45,9 @@ class QualityAssessor:
                 psnr=0.0,
                 mutual_information=0.0,
                 inlier_ratio=inlier_ratio,
-                q_score=0.0
+                q_score=0.0,
+                rmse=rmse,
+                spatial_distribution_score=0.0
             )
             
         val_src = warped_source[overlap].astype(np.float32)
@@ -103,10 +108,31 @@ class QualityAssessor:
         q_score = float(self.w_ssim * ssim + self.w_nmi * nmi + self.w_inlier * inlier_ratio)
         q_score = float(np.clip(q_score, 0.0, 1.0))
         
+        # 6. Spatial distribution score
+        sds = self.compute_spatial_distribution_score(inlier_matches, reference_image.shape)
+        
         return QualityMetrics(
             ssim=ssim,
             psnr=psnr,
             mutual_information=nmi,
             inlier_ratio=inlier_ratio,
-            q_score=q_score
+            q_score=q_score,
+            rmse=rmse,
+            spatial_distribution_score=sds
         )
+
+    def compute_spatial_distribution_score(self, matches: List[MatchPair], image_shape: tuple, grid_size: int = 8) -> float:
+        """Computes grid-based spatial distribution of tie-points in [0, 1]."""
+        if not matches:
+            return 0.0
+        h, w = image_shape[:2]
+        grid = np.zeros((grid_size, grid_size), dtype=np.uint8)
+        for m in matches:
+            rx, ry = m.reference_pt
+            bin_x = int(np.floor(rx / (w / grid_size)))
+            bin_y = int(np.floor(ry / (h / grid_size)))
+            # Clip bins to valid grid coordinates
+            bin_x = np.clip(bin_x, 0, grid_size - 1)
+            bin_y = np.clip(bin_y, 0, grid_size - 1)
+            grid[bin_y, bin_x] = 1
+        return float(np.sum(grid) / (grid_size * grid_size))

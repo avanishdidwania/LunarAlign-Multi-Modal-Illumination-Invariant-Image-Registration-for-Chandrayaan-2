@@ -318,7 +318,8 @@ class RegistrationPipeline:
                 warped_mono,
                 ref_mono,
                 final_inliers,
-                total_initial_matches
+                total_initial_matches,
+                rmse=float(transform_res.rmse) if transform_res else 0.0
             )
             
             # 10. GeoTIFF Exporting

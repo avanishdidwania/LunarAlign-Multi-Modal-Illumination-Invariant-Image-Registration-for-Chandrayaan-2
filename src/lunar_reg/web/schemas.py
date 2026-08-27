@@ -16,6 +16,8 @@ class QualityMetricsSchema(BaseModel):
     mutual_information: float
     inlier_ratio: float
     q_score: float
+    rmse: float
+    spatial_distribution_score: float
 
 class MatchPointSchema(BaseModel):
     source_pt: List[float] = Field(..., description="[x, y] coordinate in source image")

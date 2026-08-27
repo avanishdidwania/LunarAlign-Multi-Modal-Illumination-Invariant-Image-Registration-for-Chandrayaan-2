@@ -14,6 +14,8 @@ export interface QualityMetrics {
   mutual_information: number;
   inlier_ratio: number;
   q_score: number;
+  rmse: number;
+  spatial_distribution_score: number;
 }
 
 export interface MatchPoint {

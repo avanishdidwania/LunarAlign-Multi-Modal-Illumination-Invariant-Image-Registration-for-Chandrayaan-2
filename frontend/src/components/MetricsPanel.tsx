@@ -11,6 +11,8 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ result }) => {
   const ssim = result.quality_metrics?.ssim ?? 0.0;
   const psnr = result.quality_metrics?.psnr ?? 0.0;
   const mutual_information = result.quality_metrics?.mutual_information ?? 0.0;
+  const rmse = result.quality_metrics?.rmse ?? result.rmse ?? 0.0;
+  const spatial_dist = result.quality_metrics?.spatial_distribution_score ?? 0.0;
   
   // Radial gauge parameters
   const radius = 45;
@@ -55,7 +57,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ result }) => {
               <Zap size={12} style={{ color: 'var(--accent-blue)' }} /> RMSE
             </span>
             <span className="metric-number">
-              {result.rmse !== undefined ? `${result.rmse.toFixed(3)} px` : "0.000 px"}
+              {rmse > 0 ? `${rmse.toFixed(3)} px` : "0.000 px"}
             </span>
           </div>
 
@@ -66,6 +68,11 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ result }) => {
             <span className="metric-number">
               {result.inlier_count ?? 0} pts
             </span>
+          </div>
+
+          <div className="metric-stat-card">
+            <span className="metric-label">Spatial Dist.</span>
+            <span className="metric-number">{(spatial_dist * 100).toFixed(1)}%</span>
           </div>
 
           <div className="metric-stat-card">
