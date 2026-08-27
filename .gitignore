@@ -8,3 +8,11 @@ results/
 frontend/node_modules/
 frontend/dist/
 output_dummy/
+
+# Ignore large satellite and zip files
+*.tif
+*.tiff
+*.img
+*.IMG
+*.zip
+

@@ -160,6 +160,27 @@ class RegistrationPipeline:
             src_mono = src_img[0] if src_img.ndim == 3 else src_img
             ref_mono = ref_img[0] if ref_img.ndim == 3 else ref_img
             
+            # Safety limit: Crop extremely large images (e.g. orbit tracks) to a central 4096x4096 region
+            # to keep memory usage and processing times reasonable (under a few seconds).
+            MAX_DIM = 4096
+            if src_mono.shape[0] > MAX_DIM or src_mono.shape[1] > MAX_DIM:
+                h, w = src_mono.shape[:2]
+                new_h = min(h, MAX_DIM)
+                new_w = min(w, MAX_DIM)
+                dy = (h - new_h) // 2
+                dx = (w - new_w) // 2
+                src_mono = src_mono[dy:dy+new_h, dx:dx+new_w]
+                logger.info(f"Source image safety cropped from {src_img.shape} to {src_mono.shape}")
+                
+            if ref_mono.shape[0] > MAX_DIM or ref_mono.shape[1] > MAX_DIM:
+                h, w = ref_mono.shape[:2]
+                new_h = min(h, MAX_DIM)
+                new_w = min(w, MAX_DIM)
+                dy = (h - new_h) // 2
+                dx = (w - new_w) // 2
+                ref_mono = ref_mono[dy:dy+new_h, dx:dx+new_w]
+                logger.info(f"Reference image safety cropped from {ref_img.shape} to {ref_mono.shape}")
+            
             # 2. Illumination Normalization
             logger.info(f"Pipeline Step 2: Running illumination normalization ({self.config.illumination_method})...")
             src_norm = self.normalizer.normalize(src_mono, method=self.config.illumination_method)
