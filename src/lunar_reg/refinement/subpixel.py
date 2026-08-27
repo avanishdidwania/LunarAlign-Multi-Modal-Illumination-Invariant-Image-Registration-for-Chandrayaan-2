@@ -65,11 +65,9 @@ class SubPixelRefiner:
             src_patch = source_image[iy_src - w : iy_src + w + 1, ix_src - w : ix_src + w + 1]
             ref_window = reference_image[iy_ref - w - r : iy_ref + w + r + 1, ix_ref - w - r : ix_ref + w + r + 1]
             
-            # Convert to float32
-            if src_patch.dtype == np.uint8:
-                src_patch = src_patch.astype(np.float32)
-            if ref_window.dtype == np.uint8:
-                ref_window = ref_window.astype(np.float32)
+            # Convert to float32 unconditionally (OpenCV matchTemplate only supports uint8 or float32)
+            src_patch = src_patch.astype(np.float32)
+            ref_window = ref_window.astype(np.float32)
                 
             # Check for zero variance patches to avoid division by zero in template matching
             if np.std(src_patch) < 1e-4 or np.std(ref_window) < 1e-4:
