@@ -4,7 +4,7 @@
 
 LunarAlign is an end-to-end image registration system engineered for the Indian Space Research Organisation (ISRO) to precisely align multi-sensor imagery captured by the Chandrayaan-2 orbiter. The pipeline fuses classical computer vision with state-of-the-art deep learning — Phase Congruency for illumination invariance, SuperPoint + LightGlue for robust feature matching, and MAGSAC++ for threshold-free outlier rejection — to deliver **sub-pixel accuracy (RMSE < 1.0 pixel)** across all Chandrayaan-2 sensors including OHRC, TMC-2, and IIRS.
 
-- **Target:** SIH 2024 Problem Statement **26166** — ISRO, Department of Space
+- **Target:** SIH 2026 Problem Statement **26166** — ISRO, Department of Space
 - **Key Achievement:** Sub-pixel registration accuracy across 20× scale differences and extreme illumination variation on the lunar surface
 
 ---
