@@ -17,9 +17,10 @@ services:
     deploy:
       resources:
         reservations:
-          - driver: nvidia
-            count: all
-            capabilities: [gpu]
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     restart: unless-stopped
 
   frontend:

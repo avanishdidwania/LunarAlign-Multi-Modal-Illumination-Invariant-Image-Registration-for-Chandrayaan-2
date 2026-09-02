@@ -20,6 +20,21 @@ class TransformationResult:
 class TransformationEstimator:
     """Estimates geometric transformation from validated match points."""
 
+    def __init__(self, max_scale: float = 20.0, min_scale: float = 0.05,
+                 max_condition_number: float = 50.0):
+        """
+        Args:
+            max_scale: Maximum allowed scale factor. Default 20.0 accommodates
+                cross-sensor registration (OHRC 0.25m vs TMC-2 5m = 20x).
+            min_scale: Minimum allowed scale factor.
+            max_condition_number: Maximum condition number. Default 50.0 tolerates
+                anisotropic scaling in oblique lunar imagery while rejecting
+                degenerate (collinear) configurations.
+        """
+        self.max_scale = max_scale
+        self.min_scale = min_scale
+        self.max_condition_number = max_condition_number
+
     def auto_select_model(self, matches: List[MatchPair]) -> TransformationType:
         """
         Select affine vs projective based on spatial extent of match points.
@@ -111,19 +126,19 @@ class TransformationEstimator:
         """
         Validate that transformation is physically plausible:
         - Determinant > 0 (non-degenerate/no mirroring)
-        - Scale change within bounds [0.1, 10.0]
-        - No extreme shear (condition number <= 10.0)
+        - Scale change within bounds [min_scale, max_scale]
+        - No extreme shear (condition number <= max_condition_number)
         """
         det = np.linalg.det(matrix[:2, :2])
         if det <= 0:
             return False
-            
+
         s = np.linalg.svd(matrix[:2, :2], compute_uv=False)
-        if s[0] > 10.0 or s[1] < 0.1:
+        if s[0] > self.max_scale or s[1] < self.min_scale:
             return False
-            
+
         cond = s[0] / (s[1] + 1e-8)
-        if cond > 10.0:
+        if cond > self.max_condition_number:
             return False
-            
+
         return True

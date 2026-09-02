@@ -133,8 +133,7 @@ class RegistrationPipeline:
             # 1. Image Loading
             logger.info("Pipeline Step 1: Loading images...")
             try:
-                src_loaded = self.loader.load(source_path)
-                ref_loaded = self.loader.load(reference_path)
+                src_loaded, ref_loaded = self.loader.load_overlapping_pair(source_path, reference_path)
             except Exception as e:
                 return RegistrationResult(
                     success=False,
