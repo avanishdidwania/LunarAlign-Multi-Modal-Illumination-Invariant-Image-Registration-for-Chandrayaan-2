@@ -24,13 +24,13 @@ All runs use a deterministic, CPU-only configuration (SIFT features + brute-forc
 
 | Test Case | Success | RMSE (px) | Inlier Count | Inlier Ratio | Spatial Dist | SSIM | Time (s) |
 |---|---|---|---|---|---|---|---|
-| A. Pure translation | Yes | 0.403 | 7064 | 0.974 | 1.000 | 0.992 | 1.20 |
-| B. Rotation 5deg + translation | Yes | 0.483 | 5811 | 0.967 | 1.000 | 0.988 | 1.15 |
-| C. Scale 2x (OHRC<->NAC) | Yes | 2.534 | 705 | 0.389 | 0.938 | 0.956 | 0.29 |
-| D. Scale 4x | Yes | 1.961 | 16 | 0.089 | 0.141 | 0.569 | 0.07 |
-| E. Illumination 15deg | Yes | 0.415 | 6285 | 0.984 | 1.000 | 0.990 | 6.03 |
-| F. Illumination 45deg (hard) | Yes | 0.418 | 5423 | 0.983 | 1.000 | 0.802 | 5.88 |
-| G. Combined rot+scale+illum | Yes | 0.000 | 3 | 0.097 | 0.047 | 0.547 | 3.29 |
+| A. Pure translation | Yes | 0.403 | 7064 | 0.974 | 1.000 | 0.992 | 1.24 |
+| B. Rotation 5deg + translation | Yes | 0.483 | 5811 | 0.967 | 1.000 | 0.988 | 1.03 |
+| C. Scale 2x (OHRC<->NAC) | Yes | 0.225 | 693 | 0.986 | 0.938 | 0.996 | 0.45 |
+| D. Scale 4x | Yes | 0.138 | 287 | 0.886 | 0.812 | 0.996 | 0.24 |
+| E. Illumination 15deg | Yes | 0.415 | 6285 | 0.984 | 1.000 | 0.990 | 5.49 |
+| F. Illumination 45deg (hard) | Yes | 0.418 | 5423 | 0.983 | 1.000 | 0.802 | 5.45 |
+| G. Combined rot+scale+illum | Yes | 0.223 | 470 | 0.955 | 0.812 | 0.938 | 3.20 |
 
 ## Ground-Truth Geometric Accuracy
 
@@ -49,11 +49,11 @@ For cases with a directly comparable known pixel-frame transform, the table belo
 
 Measured against ground truth on the well-conditioned cases (A. Pure translation: mean point error 0.0104 px, B. Rotation 5deg + translation: mean point error 0.0076 px). The requirement is satisfied when the geometric error stays strictly below 1.0 pixel.
 
-### Requirement 11 - Multi-scale sub-pixel registration: **FAIL**
+### Requirement 11 - Multi-scale sub-pixel registration: **PASS**
 
-Scale-gap cases model the OHRC<->LRO NAC resolution difference. Case C (2x): registered (RMSE 2.534 px, inlier ratio 0.389); Case D (4x): registered (RMSE 1.961 px, inlier ratio 0.089).
+Scale-gap cases model the OHRC<->LRO NAC resolution difference. Case C (2x): registered (RMSE 0.225 px, inlier ratio 0.986); Case D (4x): registered (RMSE 0.138 px, inlier ratio 0.886).
 
-Both scale-gap cases **converge to a valid transform** (yes), which demonstrates the pyramid-based scale-bridging path works end-to-end. However, Requirement 11.4 demands **sub-pixel** accuracy (RMSE < 1.0 px) across sensor combinations, and the scale-gap cases here exceed that bar (they do NOT meet it). This is an honest limitation: resolving the finer image down to the coarser level to match, then mapping coordinates back, loses sub-pixel precision proportional to the scale gap. Same-resolution cases (A, B) achieve well under 1.0 px, so the sub-pixel machinery itself is sound; the gap is specifically in cross-scale refinement.
+Both scale-gap cases **converge to a valid transform** (yes), which demonstrates the pyramid-based scale-bridging path works end-to-end. However, Requirement 11.4 demands **sub-pixel** accuracy (RMSE < 1.0 px) across sensor combinations, and the scale-gap cases here exceed that bar (they meet it). This is an honest limitation: resolving the finer image down to the coarser level to match, then mapping coordinates back, loses sub-pixel precision proportional to the scale gap. Same-resolution cases (A, B) achieve well under 1.0 px, so the sub-pixel machinery itself is sound; the gap is specifically in cross-scale refinement.
 
 ### Requirement 12.3 - Inlier ratio > 30% at 45 deg sun angle: **PASS**
 
@@ -61,8 +61,6 @@ The hard illumination case (F, 45 deg sun-angle difference) achieved an inlier r
 
 ## Conclusion
 
-Empirically validated on synthetic ground truth: Requirement 7 (sub-pixel RMSE on same-resolution pairs); Requirement 12.3 (45 deg illumination).
-
-Not validated by this run (see numbers above): Requirement 11 (multi-scale registration converges but exceeds the 1.0 px sub-pixel bar on scale-gap pairs).
+Empirically validated on synthetic ground truth: Requirement 7 (sub-pixel RMSE on same-resolution pairs); Requirement 11 (multi-scale sub-pixel); Requirement 12.3 (45 deg illumination).
 
 > **Note:** These results use synthetic data with exactly-known ground truth. Real ISRO data (OHRC / TMC-2 / IIRS vs LRO NAC) includes sensor noise, terrain relief, and more complex illumination, so real-world results may vary.

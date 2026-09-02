@@ -99,6 +99,185 @@ class RegistrationPipeline:
         self.assessor = QualityAssessor()
         self.exporter = GeoTiffExporter()
 
+    def _full_res_refine(
+        self,
+        src_mono: np.ndarray,
+        ref_mono: np.ndarray,
+        coarse_transform: TransformationResult,
+        transform_enum: TransformationType,
+        total_initial_matches: int,
+    ) -> Optional[Tuple[TransformationResult, List[MatchPair], List[RefinedMatch], int]]:
+        """
+        Second-stage, full-resolution refinement for scale-gap cases.
+
+        The coarse transform T_c maps source pixel coords -> reference pixel coords.
+        We resample the reference into the source's pixel grid (ref_in_src), so both
+        images are now at source resolution and roughly aligned. We then re-detect and
+        re-match at full resolution to obtain a residual transform R (src -> ref_in_src,
+        near identity), and compose the final transform as T_final = T_c @ R.
+
+        Returns (transform_result, inlier_matches, refined_matches, n_raw_matches) on
+        success, or None if the pass could not produce a usable result. This method never
+        raises; on any failure it returns None so the caller keeps the coarse result.
+        """
+        try:
+            T_c = coarse_transform.matrix.astype(np.float64)
+
+            # Warp the reference into the source pixel grid. cv2.warpPerspective samples
+            # the input at matrix^-1 @ p_out, so passing inv(T_c) makes each source-grid
+            # output pixel sample the reference at T_c(p_out) -> alignment to source.
+            try:
+                T_c_inv = np.linalg.inv(T_c)
+            except np.linalg.LinAlgError:
+                return None
+
+            ref_in_src = self.warper.warp(
+                ref_mono,
+                T_c_inv,
+                src_mono.shape,
+                interpolation=self.config.interpolation,
+            )
+
+            # Re-detect + re-match at full resolution between source and the coarsely
+            # aligned reference. Coordinates are now 1:1 (no scale multiplication).
+            if self.config.matching_method == "loftr":
+                res = self.matcher.match_images(src_mono, ref_in_src)
+                raw = res.matches
+            else:
+                src_det = self.detector.detect(src_mono)
+                ref_det = self.detector.detect(ref_in_src)
+                res = self.matcher.match(src_det, ref_det)
+                raw = res.matches
+
+            if not raw:
+                return None
+
+            n_raw_matches = len(raw)
+            residual_matches = [
+                MatchPair(
+                    source_idx=m.source_idx,
+                    reference_idx=m.reference_idx,
+                    source_pt=m.source_pt,
+                    reference_pt=m.reference_pt,
+                    confidence=m.confidence,
+                )
+                for m in raw
+            ]
+
+            # Outlier reject the residual matches (same model type as coarse pass).
+            model_type = (
+                "homography"
+                if transform_enum == TransformationType.PROJECTIVE
+                else "affine"
+            )
+            outlier_res = self.rejector.reject(residual_matches, model_type=model_type)
+            residual_inliers = outlier_res.inlier_matches
+
+            min_pts = 4 if transform_enum == TransformationType.PROJECTIVE else 3
+            if len(residual_inliers) < max(min_pts, 10):
+                return None
+
+            # Sub-pixel refine the residual matches at full source resolution.
+            refined_list: List[RefinedMatch] = []
+            if self.config.refine_subpixel and len(residual_inliers) >= 3:
+                refinement_res = self.refiner.refine(src_mono, ref_in_src, residual_inliers)
+                refined_pairs = [
+                    MatchPair(
+                        source_idx=i,
+                        reference_idx=i,
+                        source_pt=rm.source_pt,
+                        reference_pt=rm.reference_pt,
+                        confidence=rm.ncc_score,
+                    )
+                    for i, rm in enumerate(refinement_res.refined_matches)
+                ]
+                if len(refined_pairs) >= min_pts:
+                    residual_inliers = refined_pairs
+                    refined_list = refinement_res.refined_matches
+
+            if not refined_list:
+                refined_list = [
+                    RefinedMatch(
+                        source_pt=m.source_pt,
+                        reference_pt=m.reference_pt,
+                        accuracy_estimate=0.5,
+                        ncc_score=m.confidence,
+                    )
+                    for m in residual_inliers
+                ]
+
+            if len(residual_inliers) < min_pts:
+                return None
+
+            # Estimate the residual transform R (source -> ref_in_src frame).
+            residual_res = self.estimator.estimate(residual_inliers, transform_enum)
+            R = residual_res.matrix.astype(np.float64)
+
+            # Compose: a point p_src maps to R(p_src) in the ref_in_src frame, and
+            # T_c maps that back to original reference coords. So T_final = T_c @ R.
+            T_final = T_c @ R
+
+            # Recompute residuals/RMSE of the composed transform against the residual
+            # inliers mapped into original reference coords (T_c applied to their
+            # ref_in_src coordinates), so the reported RMSE is comparable to the coarse
+            # pass (both measured in original reference-frame pixels).
+            src_pts = np.array([m.source_pt for m in residual_inliers], dtype=np.float64)
+            ref_in_src_pts = np.array(
+                [m.reference_pt for m in residual_inliers], dtype=np.float64
+            )
+
+            def _apply(mat: np.ndarray, pts: np.ndarray) -> np.ndarray:
+                hom = np.hstack([pts, np.ones((len(pts), 1))])
+                proj = hom @ mat.T
+                return proj[:, :2] / (proj[:, 2:3] + 1e-12)
+
+            # Target reference-frame coords for each inlier.
+            target_ref = _apply(T_c, ref_in_src_pts)
+            proj_ref = _apply(T_final, src_pts)
+            residuals = np.linalg.norm(proj_ref - target_ref, axis=1)
+            rmse = float(np.sqrt(np.mean(residuals ** 2)))
+
+            s = np.linalg.svd(T_final[:2, :2], compute_uv=False)
+            condition_number = float(s[0] / (s[1] + 1e-8))
+
+            final_transform_res = TransformationResult(
+                matrix=T_final,
+                transformation_type=transform_enum,
+                residuals=residuals,
+                rmse=rmse,
+                condition_number=condition_number,
+            )
+
+            # Return the inliers expressed in ORIGINAL reference coords so downstream
+            # consumers (quality assessment, refined_matches) remain consistent.
+            final_inliers = [
+                MatchPair(
+                    source_idx=i,
+                    reference_idx=i,
+                    source_pt=(float(sp[0]), float(sp[1])),
+                    reference_pt=(float(tp[0]), float(tp[1])),
+                    confidence=m.confidence,
+                )
+                for i, (sp, tp, m) in enumerate(
+                    zip(src_pts, target_ref, residual_inliers)
+                )
+            ]
+            final_refined = [
+                RefinedMatch(
+                    source_pt=fi.source_pt,
+                    reference_pt=fi.reference_pt,
+                    accuracy_estimate=rm.accuracy_estimate,
+                    ncc_score=rm.ncc_score,
+                )
+                for fi, rm in zip(final_inliers, refined_list)
+            ]
+
+            return final_transform_res, final_inliers, final_refined, n_raw_matches
+
+        except Exception:
+            logger.exception("Full-resolution refinement pass failed; keeping coarse result.")
+            return None
+
     def run(self, source_path: Path, reference_path: Path,
             output_dir: Path) -> RegistrationResult:
         """
@@ -180,7 +359,8 @@ class RegistrationPipeline:
             scale_factor_ref = 1.0
             
             ratio = max(res_src, res_ref) / (min(res_src, res_ref) + 1e-8)
-            if ratio > 1.2:
+            scale_gap_detected = ratio > 1.2
+            if scale_gap_detected:
                 logger.info(f"Scale gap detected (ratio: {ratio:.2f}). Constructing Gaussian pyramids...")
                 src_pyr = self.pyramid_builder.build(src_norm, n_levels=5, scale_factor=self.config.pyramid_scale_factor)
                 ref_pyr = self.pyramid_builder.build(ref_norm, n_levels=5, scale_factor=self.config.pyramid_scale_factor)
@@ -313,6 +493,67 @@ class RegistrationPipeline:
                     error_message="Estimated transformation failed physical plausibility checks.",
                     execution_time_seconds=time.time() - start_time
                 )
+                
+            # 7b. Full-resolution refinement pass (coarse-to-fine two-stage matching).
+            # For scale-gap cases, the matches above were established at a coarse pyramid
+            # level and their coordinates scaled back to full resolution, which multiplies
+            # positional error by the scale factor. Here we resample the reference into the
+            # source's pixel grid using the coarse transform (so both images are now at
+            # source resolution and roughly aligned), re-match at full resolution, and
+            # compose the resulting residual correction with the coarse transform.
+            if scale_gap_detected and self.config.full_res_refine:
+                logger.info(
+                    "Pipeline Step 7b: Running full-resolution refinement pass for "
+                    "scale-gap sub-pixel accuracy..."
+                )
+                refined_result = self._full_res_refine(
+                    src_mono=src_mono,
+                    ref_mono=ref_mono,
+                    coarse_transform=transform_res,
+                    transform_enum=transform_enum,
+                    total_initial_matches=total_initial_matches,
+                )
+                if refined_result is not None:
+                    new_transform_res, new_inliers, new_refined_list, new_raw_count = refined_result
+                    # Decide whether to accept the refined result. We must not regress,
+                    # but a naive "RMSE must not increase" test is unfair when the coarse
+                    # pass overfit a tiny inlier set (e.g. an affine fit to exactly 3
+                    # points reports ~0 RMSE regardless of true accuracy). So we accept
+                    # the full-resolution result when it has a healthy inlier count AND
+                    # either it does not worsen the coarse RMSE, or the coarse solution
+                    # was overfit to very few points while the refined solution is itself
+                    # comfortably sub-pixel.
+                    enough_inliers = len(new_inliers) >= 10
+                    not_worse = new_transform_res.rmse <= transform_res.rmse + 1e-6
+                    coarse_overfit = len(final_inliers) < 10
+                    refined_subpixel = new_transform_res.rmse < 1.0
+                    accept = enough_inliers and (
+                        not_worse or (coarse_overfit and refined_subpixel)
+                    )
+                    if accept and self.estimator.validate_transform(new_transform_res.matrix):
+                        logger.info(
+                            "Full-resolution refinement accepted: RMSE "
+                            f"{transform_res.rmse:.4f} -> {new_transform_res.rmse:.4f} px, "
+                            f"inliers {len(final_inliers)} -> {len(new_inliers)}."
+                        )
+                        transform_res = new_transform_res
+                        final_inliers = new_inliers
+                        refined_list = new_refined_list
+                        # Update the initial-match count to the full-res pass so the
+                        # inlier ratio reported by quality assessment stays consistent
+                        # (denominator and numerator come from the same matching pass).
+                        total_initial_matches = max(new_raw_count, len(new_inliers))
+                    else:
+                        logger.info(
+                            "Full-resolution refinement rejected (would regress); "
+                            f"keeping coarse result (RMSE {transform_res.rmse:.4f} px, "
+                            f"{len(final_inliers)} inliers)."
+                        )
+                else:
+                    logger.info(
+                        "Full-resolution refinement produced no usable result; "
+                        "keeping coarse result."
+                    )
                 
             # 8. Image Warping
             logger.info("Pipeline Step 8: Warping source image bands...")

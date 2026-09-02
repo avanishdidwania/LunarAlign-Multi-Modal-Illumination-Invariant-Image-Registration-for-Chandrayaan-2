@@ -26,6 +26,7 @@ class RegistrationConfig:
     transform_type: Optional[str] = None
     refine_subpixel: bool = True
     refinement_patch_size: int = 21
+    full_res_refine: bool = True
     interpolation: str = "bicubic"
     device: str = "auto"
 
@@ -80,6 +81,8 @@ class RegistrationConfig:
             raise ValueError("ransac_max_iters must be positive")
         if self.refinement_patch_size <= 0 or self.refinement_patch_size % 2 == 0:
             raise ValueError("refinement_patch_size must be a positive odd integer")
+        if not isinstance(self.full_res_refine, bool):
+            raise ValueError("full_res_refine must be a boolean")
 
 @dataclass
 class WebConfig:
