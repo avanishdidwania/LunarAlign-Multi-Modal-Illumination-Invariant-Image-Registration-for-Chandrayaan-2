@@ -134,9 +134,10 @@ async def register(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
-    # Parse multipart form with a 4 GB per-part size limit to handle large .img files
+    # Parse multipart form. The large-file size limit is handled globally in
+    # web/app.py via MultiPartParser.max_file_size, so no kwargs are needed here.
     try:
-        form = await request.form(max_files=10, max_fields=20, max_part_size=4 * 1024 * 1024 * 1024)
+        form = await request.form()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Form parse error: {e}")
 
