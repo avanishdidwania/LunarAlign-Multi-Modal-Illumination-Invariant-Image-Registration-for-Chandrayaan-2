@@ -315,6 +315,23 @@ After computing the initial homography, the pipeline refines correspondence loca
 
 ---
 
+## 🔧 Engineering Challenges
+
+LunarAlign was battle-tested on real Chandrayaan-2 and LRO NAC data, surfacing production-grade challenges rarely seen with synthetic benchmarks:
+
+| Challenge | Impact | Solution |
+|-----------|--------|----------|
+| 800-megapixel orbital tracks | 12.8 GB OOM crash | Tiled phase congruency → constant ~60 MB |
+| PDS4/PDS3 format mismatch | GDAL cannot parse | Custom XML label parser → GeoTIFF |
+| Multi-hundred-MB uploads | Connection resets, 400 errors | 4 GB chunked streaming + direct Uvicorn routing |
+| 16-bit lunar rasters | OpenCV matchTemplate crash | Unconditional float32 casting |
+| Non-overlapping orbit strips | Zero tie-points | Georeferenced overlap-aware cropping |
+| Browser TIFF rendering | Black canvas | Backend PNG preview endpoints |
+
+See [docs/ENGINEERING_CHALLENGES.md](docs/ENGINEERING_CHALLENGES.md) for detailed root-cause analysis and resolutions.
+
+---
+
 ## 📸 Screenshots
 
 | Dashboard | Results |
