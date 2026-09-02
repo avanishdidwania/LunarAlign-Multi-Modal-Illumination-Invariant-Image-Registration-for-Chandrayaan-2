@@ -16,3 +16,6 @@ output_dummy/
 *.IMG
 *.zip
 
+# Benchmark artifacts (generated GeoTIFFs + warped outputs)
+benchmark_data/
+benchmark_output/

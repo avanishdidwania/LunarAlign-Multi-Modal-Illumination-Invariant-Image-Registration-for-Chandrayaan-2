@@ -185,9 +185,21 @@ class RegistrationPipeline:
                 src_pyr = self.pyramid_builder.build(src_norm, n_levels=5, scale_factor=self.config.pyramid_scale_factor)
                 ref_pyr = self.pyramid_builder.build(ref_norm, n_levels=5, scale_factor=self.config.pyramid_scale_factor)
                 
-                lvl_src, lvl_ref = self.pyramid_builder.find_matching_levels(
+                matching_pairs = self.pyramid_builder.find_matching_levels(
                     src_pyr, ref_pyr, res_src, res_ref
                 )
+                if matching_pairs:
+                    # Prefer the pair that retains the most detail (finest levels),
+                    # i.e. the smallest combined pyramid depth.
+                    lvl_src, lvl_ref = min(matching_pairs, key=lambda p: p[0] + p[1])
+                else:
+                    # No aligned level pair found; fall back to matching at full
+                    # resolution rather than crashing.
+                    logger.warning(
+                        "No aligned pyramid level pair found for scale ratio "
+                        f"{ratio:.2f}; falling back to full-resolution matching."
+                    )
+                    lvl_src, lvl_ref = 0, 0
                 logger.info(f"Matched levels: source level={lvl_src}, reference level={lvl_ref}")
                 src_matching_img = src_pyr.levels[lvl_src]
                 ref_matching_img = ref_pyr.levels[lvl_ref]
