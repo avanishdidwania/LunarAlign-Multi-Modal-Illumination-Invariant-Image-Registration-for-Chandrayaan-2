@@ -180,10 +180,14 @@ class IlluminationNormalizer:
               tile_size: tuple[int, int] = (8, 8)) -> np.ndarray:
         """Contrast Limited Adaptive Histogram Equalization."""
         if image.dtype != np.uint8:
-            img_min = image.min()
-            img_max = image.max()
+            # Cast to float32 BEFORE any arithmetic to avoid integer overflow.
+            # Native int16/uint16 subtraction can overflow (e.g. 30000 - (-30000)
+            # exceeds int16's max of 32767) and corrupt the normalization.
+            img_f = image.astype(np.float32)
+            img_min = float(img_f.min())
+            img_max = float(img_f.max())
             if img_max > img_min:
-                img_uint8 = ((image - img_min) / (img_max - img_min) * 255.0).astype(np.uint8)
+                img_uint8 = ((img_f - img_min) / (img_max - img_min) * 255.0).astype(np.uint8)
             else:
                 img_uint8 = np.zeros_like(image, dtype=np.uint8)
         else:
